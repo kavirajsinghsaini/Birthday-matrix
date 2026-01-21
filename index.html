@@ -1,0 +1,321 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Matrix Birthday Wish</title>
+    <style>
+        :root {
+            --primary-color: #ff0055;
+            --primary-glow: #ff0055;
+            --bg-color: #000000;
+            --text-color: #ffffff;
+            --glass-bg: rgba(20, 0, 10, 0.6);
+            --glass-border: rgba(255, 0, 85, 0.5);
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: var(--bg-color);
+            font-family: 'Courier New', Courier, monospace;
+        }
+
+        /* Canvas covers the entire screen behind the UI */
+        canvas {
+            display: block;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 0;
+        }
+
+        /* UI Overlay Container */
+        .ui-container {
+            position: relative;
+            z-index: 10;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            pointer-events: none; /* Let clicks pass through to canvas if needed */
+        }
+
+        /* The Birthday Card */
+        .card {
+            pointer-events: auto;
+            text-align: center;
+            background: var(--glass-bg);
+            padding: 3rem 4rem;
+            border-radius: 16px;
+            border: 1px solid var(--glass-border);
+            box-shadow: 0 0 30px rgba(255, 0, 85, 0.2), inset 0 0 20px rgba(255, 0, 85, 0.1);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            transform: perspective(1000px) rotateX(0deg) rotateY(0deg);
+            transition: transform 0.2s ease-out, box-shadow 0.3s ease;
+            max-width: 90%;
+            animation: float 6s ease-in-out infinite;
+        }
+
+        .card:hover {
+            box-shadow: 0 0 50px rgba(255, 0, 85, 0.4), inset 0 0 30px rgba(255, 0, 85, 0.2);
+        }
+
+        h1 {
+            color: var(--primary-color);
+            font-size: 3.5rem;
+            text-transform: uppercase;
+            margin: 0 0 1rem 0;
+            text-shadow: 0 0 10px var(--primary-glow);
+            letter-spacing: 4px;
+            font-weight: 800;
+        }
+
+        .typewriter-text {
+            color: var(--text-color);
+            font-size: 1.4rem;
+            min-height: 1.5em; /* Prevent layout jump */
+            line-height: 1.5;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .cursor {
+            display: inline-block;
+            width: 10px;
+            height: 1.4rem;
+            background-color: var(--primary-color);
+            margin-left: 5px;
+            animation: blink 1s infinite;
+            box-shadow: 0 0 8px var(--primary-glow);
+        }
+
+        /* Decorative Icon */
+        .heart-icon {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+            display: inline-block;
+            animation: heartbeat 1.2s infinite, floatHeart 3s ease-in-out infinite;
+            filter: drop-shadow(0 0 10px var(--primary-glow));
+        }
+
+        /* Animations */
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-15px); }
+        }
+
+        @keyframes heartbeat {
+            0% { transform: scale(1); }
+            14% { transform: scale(1.3); }
+            28% { transform: scale(1); }
+            42% { transform: scale(1.3); }
+            70% { transform: scale(1); }
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0; }
+        }
+
+        @keyframes floatHeart {
+            0%, 100% { transform: translateY(0) rotate(0deg); }
+            50% { transform: translateY(-10px) rotate(-5deg); }
+        }
+
+        /* Mobile Adjustments */
+        @media (max-width: 600px) {
+            .card {
+                padding: 2rem;
+            }
+            h1 {
+                font-size: 2rem;
+            }
+            .typewriter-text {
+                font-size: 1.1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="matrix"></canvas>
+
+    <div class="ui-container">
+        <div class="card" id="tiltCard">
+            <div class="heart-icon">❤</div>
+            <h1>Happy Birthday</h1>
+            <div class="typewriter-text">
+                <span id="message"></span><span class="cursor"></span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /**
+         * ANIMATION ENGINE: Matrix Rain
+         * Optimized for performance using requestAnimationFrame
+         */
+        const canvas = document.getElementById('matrix');
+        const ctx = canvas.getContext('2d');
+
+        // Configuration
+        const config = {
+            fontSize: 16,
+            color: '#ff0055', // Hot Pink
+            trailColor: 'rgba(0, 0, 0, 0.08)', // Fades slower for better trails
+            chars: "01💋01010🌹❤️1LOVE💖❤HA🌹PP❤️‍🔥INESS🫀ODE🌹01🫦$#@&💟🥳%%",
+            mouseRadius: 100 // Radius of mouse interaction
+        };
+
+        let width, height, columns;
+        let drops = []; // Y-coordinates of drops
+        let mouse = { x: -1000, y: -1000 }; // Off-screen initially
+
+        // Resize Handling
+        function resize() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+            
+            // Calculate columns based on new width
+            const newColumns = Math.floor(width / config.fontSize);
+            
+            // Reset drops array: if we have more columns, add them. If fewer, slice.
+            // We preserve existing Y positions to prevent "jumping" on resize.
+            if (newColumns > drops.length) {
+                for (let i = drops.length; i < newColumns; i++) {
+                    // Random start height so they don't all start at top together
+                    drops[i] = Math.random() * -100; 
+                }
+            } else {
+                drops = drops.slice(0, newColumns);
+            }
+            columns = newColumns;
+        }
+
+        // Initialize
+        window.addEventListener('resize', resize);
+        resize(); // Initial call
+
+        // Mouse Interaction Listeners
+        window.addEventListener('mousemove', (e) => {
+            mouse.x = e.clientX;
+            mouse.y = e.clientY;
+        });
+        window.addEventListener('mouseleave', () => {
+            mouse.x = -1000;
+            mouse.y = -1000;
+        });
+
+        // The Animation Loop
+        function drawMatrix() {
+            // 1. Draw semi-transparent rectangle to create fade effect
+            ctx.fillStyle = config.trailColor;
+            ctx.fillRect(0, 0, width, height);
+
+            // 2. Set font properties
+            ctx.font = `bold ${config.fontSize}px 'Courier New'`;
+            ctx.textBaseline = 'top';
+
+            // 3. Draw characters
+            for (let i = 0; i < drops.length; i++) {
+                const x = i * config.fontSize;
+                const y = drops[i] * config.fontSize;
+
+                // Random character
+                const text = config.chars.charAt(Math.floor(Math.random() * config.chars.length));
+
+                // Check distance to mouse for interaction effect
+                const dx = x - mouse.x;
+                const dy = y - mouse.y;
+                const distance = Math.sqrt(dx*dx + dy*dy);
+                const isNearMouse = distance < config.mouseRadius;
+
+                // Style changes if near mouse (Matrix disruption)
+                if (isNearMouse) {
+                    ctx.fillStyle = '#ffffff'; // White spark near mouse
+                    ctx.font = `bold ${config.fontSize * 1.5}px 'Courier New'`; // Bigger
+                } else {
+                    ctx.fillStyle = config.color;
+                    ctx.font = `bold ${config.fontSize}px 'Courier New'`;
+                }
+
+                // Add a glow effect to the "head" of the drop (the leading character)
+                // We simulate a glow by drawing a slightly larger, brighter shadow behind the head
+                if (!isNearMouse) {
+                    ctx.shadowColor = config.color;
+                    ctx.shadowBlur = 8;
+                } else {
+                    ctx.shadowBlur = 0;
+                }
+
+                ctx.fillText(text, x, y);
+                ctx.shadowBlur = 0; // Reset shadow for next iteration performance
+
+                // Move drop down
+                // If near mouse, accelerate the drop away
+                const speedMultiplier = isNearMouse ? 2.5 : 1;
+                drops[i] += speedMultiplier;
+
+                // 4. Reset drop to top randomly
+                if (drops[i] * config.fontSize > height && Math.random() > 0.975) {
+                    drops[i] = 0;
+                }
+            }
+
+            requestAnimationFrame(drawMatrix);
+        }
+
+        // Start Matrix
+        drawMatrix();
+
+
+        /**
+         * UI LOGIC: Typewriter Effect & 3D Tilt
+         */
+        
+        // 1. Typewriter Effect
+        const messageElement = document.getElementById('message');
+        const textToType = "You are the source code to my heart.";
+        let charIndex = 0;
+
+        function typeWriter() {
+            if (charIndex < textToType.length) {
+                messageElement.textContent += textToType.charAt(charIndex);
+                charIndex++;
+                // Randomize typing speed slightly for realism
+                setTimeout(typeWriter, 50 + Math.random() * 100); 
+            }
+        }
+        
+        // Start typing after a short delay
+        setTimeout(typeWriter, 1000);
+
+
+        // 2. 3D Tilt Effect on Card
+        const card = document.getElementById('tiltCard');
+
+        document.addEventListener('mousemove', (e) => {
+            const xAxis = (window.innerWidth / 2 - e.pageX) / 25;
+            const yAxis = (window.innerHeight / 2 - e.pageY) / 25;
+            
+            // Apply the rotation
+            card.style.transform = `perspective(1000px) rotateY(${xAxis}deg) rotateX(${yAxis}deg)`;
+        });
+
+        // Reset rotation when mouse leaves window
+        document.addEventListener('mouseleave', () => {
+            card.style.transform = `perspective(1000px) rotateY(0deg) rotateX(0deg)`;
+        });
+
+    </script>
+</body>
+</html>
+   
